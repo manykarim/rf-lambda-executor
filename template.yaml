@@ -1,0 +1,106 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  python3.9
+
+  Sample SAM Template for sam-app
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 60
+
+Resources:
+## S3 buckets
+  TestsBucket:
+    Type: AWS::S3::Bucket
+  ResultsBucket:
+    Type: AWS::S3::Bucket
+  ResponseQueue:
+    Type: AWS::SQS::Queue
+  ApiGatewayApi:
+    Type: 'AWS::Serverless::Api'
+    Properties:
+      StageName: 'Beta'
+    Auth:
+        ApiKeyRequired: true
+  RunRobotFrameworkTestsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      PackageType: Image
+      Architectures:
+        - x86_64
+      MemorySize: 1536
+      Timeout: 120
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /
+            Method: post
+            RestApiId:
+              Ref: ApiGatewayApi
+            Auth:
+              ApiKeyRequired: true
+      Environment:
+        Variables:
+          SQSqueueName: !Ref ResponseQueue
+          ResultsBucketName: !Ref ResultsBucket
+          TestsBucketName: !Ref TestsBucket
+    Policies:
+      - S3CrudPolicy:
+          Bucket: !Ref TestsBucket
+      - S3CrudPolicy:
+          Bucket: !Ref ResultsBucket
+      - SQSSendMessagePolicy:
+          QueueName: !GetAtt ResponseQueue.QueueName
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ./run-robot-framework-tests
+      DockerTag: python3.9-v1
+  MergeRobotFrameworkResultsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./merge-results
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      MemorySize: 512
+      Timeout: 60
+      Environment:
+        Variables:
+          SQSqueueName: !Ref ResponseQueue
+          ResultsBucketName: !Ref ResultsBucket
+          TestsBucketName: !Ref TestsBucket
+    Policies:
+      - S3CrudPolicy:
+          Bucket: !Ref TestsBucket
+      - S3CrudPolicy:
+          Bucket: !Ref ResultsBucket
+      - SQSSendMessagePolicy:
+          QueueName: !GetAtt ResponseQueue.QueueName
+
+
+Outputs:
+  RunRobotFrameworkTestsFunction:
+    Description: RunRobotFrameworkTestsFunction function name
+    Value: !Ref RunRobotFrameworkTestsFunction
+  
+  SQSqueueName:
+    Description: SQS queue name
+    Value: !GetAtt ResponseQueue.QueueName
+
+  SQSqueueARN:
+    Description: SQS queue ARN
+    Value: !GetAtt ResponseQueue.Arn
+
+  SQSqueueURL:
+    Description: SQS queue URL
+    Value: !Ref ResponseQueue
+
+  TestsBucketName:
+    Description: Tests bucket name
+    Value: !Ref TestsBucket
+
+  ResultsBucketName:
+    Description: Results bucket name
+    Value: !Ref ResultsBucket
