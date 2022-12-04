@@ -11,20 +11,58 @@ Globals:
     Timeout: 60
 
 Resources:
-## S3 buckets
+##########################################################################
+#   S3 Buckets                                                           #
+##########################################################################
   TestsBucket:
     Type: AWS::S3::Bucket
   ResultsBucket:
     Type: AWS::S3::Bucket
-  ResponseQueue:
+  TestJobQueue:
     Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 360
   ApiGatewayApi:
     Type: 'AWS::Serverless::Api'
     Properties:
       StageName: 'Beta'
     Auth:
         ApiKeyRequired: true
-  RunRobotFrameworkTestsFunction:
+
+##########################################################################
+#   DynamoDB                                                            #
+##########################################################################
+  TestRunTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: run_id
+        AttributeType: S
+      - AttributeName: job_id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: run_id
+        KeyType: HASH
+      - AttributeName: job_id
+        KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+  TestShardTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: job_id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: job_id
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+
+##########################################################################
+#   Lambda Function                                                      #
+##########################################################################
+
+  ExecutorFunction:
     Type: AWS::Serverless::Function
     Properties:
       PackageType: Image
@@ -32,6 +70,49 @@ Resources:
         - x86_64
       MemorySize: 1536
       Timeout: 120
+      Events:
+        MySQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt TestJobQueue.Arn
+            BatchSize: 1
+      Environment:
+        Variables:
+          TestJobQueueName: !Ref TestJobQueue
+          ResultsBucketName: !Ref ResultsBucket
+          TestsBucketName: !Ref TestsBucket
+          TestRunTableName: !Ref TestRunTable
+          TestShardTableName: !Ref TestShardTable
+    Policies:
+      - S3FullAccessPolicy:
+          BucketName: !Ref TestsBucket
+      - S3FullAccessPolicy:
+          BucketName: !Ref ResultsBucket
+      - SQSSendMessagePolicy:
+          QueueName: !GetAtt TestJobQueue.QueueName
+      - DynamoDBCrudPolicy:
+          TableName: !Ref TestRunTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref TestShardTable
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ./executor
+      DockerTag: python3.9-v1
+  DistributorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./distributor
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      MemorySize: 512
+      Timeout: 60
+      Environment:
+        Variables:
+          TestJobQueueName: !Ref TestJobQueue
+          ResultsBucketName: !Ref ResultsBucket
+          TestsBucketName: !Ref TestsBucket
+          TestRunTableName: !Ref TestRunTable
+          TestShardTableName: !Ref TestShardTable
       Events:
         ApiEvent:
           Type: Api
@@ -42,60 +123,68 @@ Resources:
               Ref: ApiGatewayApi
             Auth:
               ApiKeyRequired: true
-      Environment:
-        Variables:
-          SQSqueueName: !Ref ResponseQueue
-          ResultsBucketName: !Ref ResultsBucket
-          TestsBucketName: !Ref TestsBucket
     Policies:
-      - S3CrudPolicy:
-          Bucket: !Ref TestsBucket
-      - S3CrudPolicy:
-          Bucket: !Ref ResultsBucket
+      - S3FullAccessPolicy:
+          BucketName: !Ref TestsBucket
+      - S3FullAccessPolicy:
+          BucketName: !Ref ResultsBucket
       - SQSSendMessagePolicy:
-          QueueName: !GetAtt ResponseQueue.QueueName
-    Metadata:
-      Dockerfile: Dockerfile
-      DockerContext: ./run-robot-framework-tests
-      DockerTag: python3.9-v1
-  MergeRobotFrameworkResultsFunction:
+          QueueName: !GetAtt TestJobQueue.QueueName
+      - DynamoDBCrudPolicy:
+          TableName: !Ref TestRunTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref TestShardTable
+    
+  MergerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ./merge-results
+      CodeUri: ./merger
       Handler: app.lambda_handler
       Runtime: python3.9
       MemorySize: 512
       Timeout: 60
       Environment:
         Variables:
-          SQSqueueName: !Ref ResponseQueue
           ResultsBucketName: !Ref ResultsBucket
-          TestsBucketName: !Ref TestsBucket
+          TestRunTableName: !Ref TestRunTable
+          TestShardTableName: !Ref TestShardTable
     Policies:
-      - S3CrudPolicy:
-          Bucket: !Ref TestsBucket
-      - S3CrudPolicy:
-          Bucket: !Ref ResultsBucket
+      - S3FullAccessPolicy:
+          BucketName: !Ref TestsBucket
+      - S3FullAccessPolicy:
+          BucketName: !Ref ResultsBucket
       - SQSSendMessagePolicy:
-          QueueName: !GetAtt ResponseQueue.QueueName
+          QueueName: !GetAtt TestJobQueue.QueueName
+      - DynamoDBCrudPolicy:
+          TableName: !Ref TestRunTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref TestShardTable
 
 
 Outputs:
-  RunRobotFrameworkTestsFunction:
-    Description: RunRobotFrameworkTestsFunction function name
-    Value: !Ref RunRobotFrameworkTestsFunction
+  DistributorFunction:
+    Description: Distributor Function ARN
+    Value: !Ref DistributorFunction
+
+  MergerFunction:
+    Description: Merger Function ARN
+    Value: !Ref MergerFunction
+
+  ExecutorFunction:
+    Description: Executor Function ARN
+    Value: !Ref ExecutorFunction
   
-  SQSqueueName:
+  TestJobQueueName:
     Description: SQS queue name
-    Value: !GetAtt ResponseQueue.QueueName
+    Value: !GetAtt TestJobQueue.QueueName
 
-  SQSqueueARN:
+  TestJobQueueARN:
     Description: SQS queue ARN
-    Value: !GetAtt ResponseQueue.Arn
+    Value: !GetAtt TestJobQueue.Arn
 
-  SQSqueueURL:
+  TestJobQueueURL:
     Description: SQS queue URL
-    Value: !Ref ResponseQueue
+    Value: !Ref TestJobQueue
 
   TestsBucketName:
     Description: Tests bucket name

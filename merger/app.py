@@ -1,6 +1,9 @@
 import json
 import uuid
 import boto3
+import os
+import sys
+import shutil
 import datetime
 from robot import rebot, rebot_cli
 from robot.api import ExecutionResult
@@ -44,6 +47,8 @@ def lambda_handler(event, context):
     run_id = event.get('run_id', None)
    
     if project and run_id:
+        tmp_project_folder = f'/tmp/{project}'
+        shutil.rmtree(tmp_project_folder, ignore_errors=True)
         print('Downloading results folder from s3 bucket to tmp')
         print(f"project: {project} testsuite: {run_id}")
         # Download project folder from s3 bucket to tmp
@@ -58,7 +63,8 @@ def lambda_handler(event, context):
         tests_total = result.suite.statistics.total
         # Upload .xml file to s3 bucket
         
-        s3.Bucket(resultsbucket_name).upload_file(f'/tmp/{project}/results/{run_id}/final/output.xml', f'{project}/results/{run_id}/final/output.xml')
+        #s3.Bucket(resultsbucket_name).upload_file(f'/tmp/{project}/results/{run_id}/final/output.xml', f'{project}/results/{run_id}/final/output.xml')
+        upload_folder_to_s3(f'/tmp/{project}/results/{run_id}/final', resultsbucket_name, f'{project}/results/{run_id}/final')
 
     return {
         "statusCode": 200,
@@ -97,3 +103,40 @@ def print_all_files_and_folders_recursively(path):
         subindent = ' ' * 4 * (level + 1)
         for f in files:
             print('{}{}'.format(subindent, f))
+
+def upload_folder_to_s3(bucket_name, s3_folder, local_dir):
+    """
+    Upload the contents of a folder directory
+    Args:
+        bucket_name: the name of the s3 bucket
+        s3_folder: the folder path in the s3 bucket
+        local_dir: a relative or absolute directory path in the local file system
+    """
+    client = boto3.client('s3')
+
+    # enumerate local files recursively
+    for root, dirs, files in os.walk(local_dir):
+
+        for filename in files:
+
+            # construct the full local path
+            local_path = os.path.join(root, filename)
+
+            # construct the full Dropbox path
+            relative_path = os.path.relpath(local_path, local_dir)
+            s3_path = os.path.join(s3_folder, relative_path)
+
+            # relative_path = os.path.relpath(os.path.join(root, filename))
+
+            print(f'Searching {s3_path} in {bucket_name}')
+            try:
+                client.head_object(Bucket=bucket_name, Key=s3_path)
+                print(f"Path found on S3! Skipping {s3_path}")
+
+                # try:
+                    # client.delete_object(Bucket=bucket, Key=s3_path)
+                # except:
+                    # print "Unable to delete %s..." % s3_path
+            except:
+                print("Uploading {s3_path}...")
+                client.upload_file(local_path, bucket_name, s3_path)
