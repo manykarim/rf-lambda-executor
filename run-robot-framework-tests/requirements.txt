@@ -1,2 +1,0 @@
-robotframework-browser
-robotframework-pabot
