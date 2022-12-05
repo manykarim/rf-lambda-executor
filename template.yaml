@@ -83,17 +83,17 @@ Resources:
           TestsBucketName: !Ref TestsBucket
           TestRunTableName: !Ref TestRunTable
           TestShardTableName: !Ref TestShardTable
-    Policies:
-      - S3FullAccessPolicy:
-          BucketName: !Ref TestsBucket
-      - S3FullAccessPolicy:
-          BucketName: !Ref ResultsBucket
-      - SQSSendMessagePolicy:
-          QueueName: !GetAtt TestJobQueue.QueueName
-      - DynamoDBCrudPolicy:
-          TableName: !Ref TestRunTable
-      - DynamoDBCrudPolicy:
-          TableName: !Ref TestShardTable
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: !Ref TestsBucket
+        - S3FullAccessPolicy:
+            BucketName: !Ref ResultsBucket
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt TestJobQueue.QueueName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TestRunTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TestShardTable
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: ./executor
@@ -123,17 +123,17 @@ Resources:
               Ref: ApiGatewayApi
             Auth:
               ApiKeyRequired: true
-    Policies:
-      - S3FullAccessPolicy:
-          BucketName: !Ref TestsBucket
-      - S3FullAccessPolicy:
-          BucketName: !Ref ResultsBucket
-      - SQSSendMessagePolicy:
-          QueueName: !GetAtt TestJobQueue.QueueName
-      - DynamoDBCrudPolicy:
-          TableName: !Ref TestRunTable
-      - DynamoDBCrudPolicy:
-          TableName: !Ref TestShardTable
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: !Ref TestsBucket
+        - S3FullAccessPolicy:
+            BucketName: !Ref ResultsBucket
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt TestJobQueue.QueueName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TestRunTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TestShardTable
     
   MergerFunction:
     Type: AWS::Serverless::Function
@@ -148,17 +148,17 @@ Resources:
           ResultsBucketName: !Ref ResultsBucket
           TestRunTableName: !Ref TestRunTable
           TestShardTableName: !Ref TestShardTable
-    Policies:
-      - S3FullAccessPolicy:
-          BucketName: !Ref TestsBucket
-      - S3FullAccessPolicy:
-          BucketName: !Ref ResultsBucket
-      - SQSSendMessagePolicy:
-          QueueName: !GetAtt TestJobQueue.QueueName
-      - DynamoDBCrudPolicy:
-          TableName: !Ref TestRunTable
-      - DynamoDBCrudPolicy:
-          TableName: !Ref TestShardTable
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: !Ref TestsBucket
+        - S3FullAccessPolicy:
+            BucketName: !Ref ResultsBucket
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt TestJobQueue.QueueName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TestRunTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TestShardTable
 
 
 Outputs:
