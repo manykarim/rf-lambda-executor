@@ -7,7 +7,11 @@ import shutil
 import datetime
 from robot import rebot, rebot_cli
 from robot.api import ExecutionResult
+from botocore.exceptions import ClientError
+from boto3.dynamodb.conditions import Key
+import logging
 
+logger = logging.getLogger(__name__)
 import os
 
 
@@ -35,16 +39,29 @@ def lambda_handler(event, context):
 
 
     s3 = boto3.resource('s3')
+    dynamodb = boto3.resource('dynamodb')
     resultsbucket_name = os.environ['ResultsBucketName']
+    testruntable_name = os.environ['TestRunTableName']
+    test_run_table = dynamodb.Table(testruntable_name)
     # generate filename like 2020-01-01T00:00:00.000Z.txt with current timestamp
     current_timestamp = datetime.datetime.utcnow().isoformat()
- 
+    if event["body"]:
+        data=json.loads(event["body"])
+    else:
+        data=event
     # Get event['project'], default to None
-    project = event.get('project', None)
+    project = data.get('project', None)
     # Get event['tests'], default to None
-    tests = event.get('tests', None)
+    tests = data.get('tests', None)
     # Get event['run_id'], default to None
-    run_id = event.get('run_id', None)
+    run_id = data.get('run_id', None)
+
+    # if run is not complete, return 202
+    if not is_run_complete(test_run_table, run_id):
+        return {
+            'statusCode': 202,
+            'body': json.dumps('Run is not complete')
+        }
    
     if project and run_id:
         print('Downloading results folder from s3 bucket to tmp')
@@ -72,6 +89,9 @@ def lambda_handler(event, context):
             "tests_passed": tests_passed,
             "tests_failed": tests_failed,
             "tests_total": tests_total,
+            "download_xml": f"https://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/final/output.xml",
+            "download_log": f"https://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/final/log.html",
+            "download_report": f"https://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/final/report.html"
         }),
     }
 
@@ -139,3 +159,17 @@ def upload_folder_to_s3(bucket_name, s3_folder, local_dir):
             except:
                 print("Uploading {s3_path}...")
                 client.upload_file(local_path, bucket_name, s3_path)
+
+
+def is_run_complete(table, run_id):
+        try:
+            response = table.query(KeyConditionExpression=Key('run_id').eq(run_id))
+        except ClientError as err:
+            logger.error(
+                "Couldn't query for test_runs with run_id in %s. Here's why: %s: %s", run_id,
+                err.response['Error']['Code'], err.response['Error']['Message'])
+            raise
+        else:
+            # If all items in response['Items'] have item['job_status'] == COMPLETED, return True
+            # Otherwise, return False
+            return all(item['job_status'] == 'COMPLETED' for item in response['Items'])
