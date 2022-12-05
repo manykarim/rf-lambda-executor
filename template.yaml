@@ -22,6 +22,9 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       VisibilityTimeout: 360
+##########################################################################
+#   ApiGateway                                                           #
+##########################################################################
   ApiGatewayApi:
     Type: 'AWS::Serverless::Api'
     Properties:
@@ -161,7 +164,16 @@ Resources:
             TableName: !Ref TestRunTable
         - DynamoDBCrudPolicy:
             TableName: !Ref TestShardTable
-
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /
+            Method: get
+            RestApiId:
+              Ref: ApiGatewayApi
+            Auth:
+              ApiKeyRequired: true
 
 Outputs:
   DistributorFunction:
