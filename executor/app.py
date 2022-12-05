@@ -6,7 +6,10 @@ from robot import run
 from robot.api import ExecutionResult
 import shutil
 import os
+from botocore.exceptions import ClientError
+import logging
 
+logger = logging.getLogger(__name__)
 
 def lambda_handler(event, context):
     """Sample pure Lambda function
@@ -66,7 +69,7 @@ def lambda_handler(event, context):
         upload_folder_to_s3(resultsbucket_name, f'{project}/results/{run_id}', f'/tmp/{project}/results/{run_id}')
     # Delete tmp folder
     shutil.rmtree('/tmp', ignore_errors=True)
-
+    set_test_job_status(test_run_table, run_id, job_id, "COMPLETED")
     return {
         "statusCode": 200
     }
@@ -126,3 +129,18 @@ def upload_folder_to_s3(bucket_name, s3_folder, local_dir):
             except:
                 print("Uploading {s3_path}...")
                 client.upload_file(local_path, bucket_name, s3_path)
+
+
+def set_test_job_status(table, run_id, job_id, status):
+    try:
+        response = table.update_item(
+                Key={'run_id': run_id, 'job_id': job_id},
+                UpdateExpression="set status=:s",
+                ExpressionAttributeValues={
+                    ':s': status},
+                ReturnValues="UPDATED_NEW")
+    except ClientError as err:
+        logger.error(
+            "Couldn't update test_run %s, test_job %s in table %s. Here's why: %s: %s",
+            run_id, job_id, table.name,
+            err.response['Error']['Code'], err.response['Error']['Message'])
