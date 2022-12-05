@@ -22,14 +22,18 @@ def lambda_handler(event, context):
     current_timestamp = datetime.datetime.utcnow().isoformat()
     test_run_table = dynamodb.Table(testruntable_name)
     test_shard_table = dynamodb.Table(testshardtable_name)
+    if event["body"]:
+        data=json.loads(event["body"])
+    else:
+        data=event
     # Get event['project'], default to None
-    project = event.get('project', None)
+    project = data.get('project', None)
     # Get event['tests'], default to None
-    tests = event.get('tests', None)
+    tests = data.get('tests', None)
     # Get event['run_id'], default to None
-    run_id = event.get('run_id', uuid.uuid4())
+    run_id = data.get('run_id', str(uuid.uuid4()))
     # Get event['total'], default to None
-    total = event.get('shards', None)
+    total = data.get('shards', None)
     # Clean up the tmp project folder
     tmp_project_folder = f'/tmp/{project}'
     shutil.rmtree(tmp_project_folder, ignore_errors=True)
@@ -48,12 +52,12 @@ def lambda_handler(event, context):
                 filename = file.split(".")[0]
                 with open(f'/tmp/{project}/distributor_output/{file}') as f:
                     shard_data = json.load(f)
-                    job_id = uuid.uuid4()
+                    job_id = str(uuid.uuid4())
                     response = test_run_table.put_item(
-                                Item={'run_id': run_id, 'status': 'in progress', 'job_id': str(job_id), 'total': total})
+                                Item={'run_id': run_id, 'status': 'in progress', 'job_id': job_id, 'total': total})
                     response = test_shard_table.put_item(
-                            Item={'run_id': run_id, 'shard_name': filename, 'shard_content': shard_data, 'job_id': str(job_id)})
-                    message_body = json.dumps({'project': project, 'run_id': run_id, 'shard_name': filename, 'shard_content': shard_data, 'job_id': str(job_id), 'tests': tests})
+                            Item={'run_id': run_id, 'shard_name': filename, 'shard_content': shard_data, 'job_id': job_id})
+                    message_body = json.dumps({'project': project, 'run_id': run_id, 'shard_name': filename, 'shard_content': shard_data, 'job_id': job_id, 'tests': tests})
                     # Send message to sqs queue
                     response = sqs.send_message(
                         QueueUrl=testjob_queue_url,
@@ -65,11 +69,11 @@ def lambda_handler(event, context):
                             },
                             'run_id': {
                                 'DataType': 'String',
-                                'StringValue': str(run_id)
+                                'StringValue': run_id
                             },
                             'job_id': {
                                 'DataType': 'String',
-                                'StringValue': str(job_id)
+                                'StringValue': job_id
                             }
                         }
                     )
