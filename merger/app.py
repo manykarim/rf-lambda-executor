@@ -16,28 +16,21 @@ import os
 
 
 def lambda_handler(event, context):
-    """Sample pure Lambda function
-
-    Parameters
-    ----------
-    event: dict, required
-        API Gateway Lambda Proxy Input Format
-
-        Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
-
-    context: object, required
-        Lambda Context runtime methods and attributes
-
-        Context doc: https://docs.aws.amazon.com/lambda/latest/dg/python-context-object.html
-
-    Returns
-    ------
-    API Gateway Lambda Proxy Output Format: dict
-
-        Return doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html
-    """
-
-
+    
+    http_method = event.get('httpMethod')
+    query_string = event.get('queryStringParameters')
+    headers = event.get('headers')
+    body = event.get('body')
+    if query_string is not None:
+        # Get event['project'], default to None
+        project = query_string.get('project', None)
+        # Get event['run_id'], default to None
+        run_id = query_string.get('run_id', None)
+    else:
+        # Get event['project'], default to None
+        project = event.get('project', None)
+        # Get event['run_id'], default to None
+        run_id = event.get('run_id', None)
     s3 = boto3.resource('s3')
     dynamodb = boto3.resource('dynamodb')
     resultsbucket_name = os.environ['ResultsBucketName']
@@ -45,16 +38,8 @@ def lambda_handler(event, context):
     test_run_table = dynamodb.Table(testruntable_name)
     # generate filename like 2020-01-01T00:00:00.000Z.txt with current timestamp
     current_timestamp = datetime.datetime.utcnow().isoformat()
-    if event["body"]:
-        data=json.loads(event["body"])
-    else:
-        data=event
-    # Get event['project'], default to None
-    project = data.get('project', None)
-    # Get event['tests'], default to None
-    tests = data.get('tests', None)
-    # Get event['run_id'], default to None
-    run_id = data.get('run_id', None)
+
+    
 
     # if run is not complete, return 202
     if not is_run_complete(test_run_table, run_id):
