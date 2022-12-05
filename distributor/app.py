@@ -34,10 +34,6 @@ def lambda_handler(event, context):
     run_id = data.get('run_id', str(uuid.uuid4()))
     # Get event['total'], default to None
     total = data.get('shards', None)
-    # Clean up the tmp project folder
-    tmp_project_folder = f'/tmp/{project}'
-    shutil.rmtree(tmp_project_folder, ignore_errors=True)
-
     # if project and testsuite are not None, then download project folder from s3 bucket to tmp
     if project and tests:
         print('Downloading project folder from s3 bucket to tmp')
@@ -77,6 +73,8 @@ def lambda_handler(event, context):
                             }
                         }
                     )
+    # Delete tmp folder
+    shutil.rmtree('/tmp', ignore_errors=True)
     return {
         'statusCode': 200,
         'body': json.dumps(f'Test run {run_id} created')

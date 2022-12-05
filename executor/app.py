@@ -29,7 +29,6 @@ def lambda_handler(event, context):
 
         Return doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html
     """
-
     s3 = boto3.resource('s3')
     dynamodb = boto3.resource('dynamodb')
     testsbucket_name = os.environ['TestsBucketName']
@@ -49,10 +48,6 @@ def lambda_handler(event, context):
         tests = payload.get('tests', None)
         shard_name = payload.get('shard_name', None)
         shard_content = payload.get('shard_content', None)
-        # Clean up the tmp project folder
-        # Clean up the tmp project folder
-        tmp_project_folder = f'/tmp/{project}'
-        shutil.rmtree(tmp_project_folder, ignore_errors=True)
         download_s3_folder(testsbucket_name, project, '/tmp/' + project)
         print(str(payload))
         options_dict = {'outputdir': f'/tmp/{project}/results/{run_id}',  'report': None, 'log': None, 'output':f'{job_id}.xml'}
@@ -69,7 +64,8 @@ def lambda_handler(event, context):
             run(f'/tmp/{project}/{tests}', **options_dict, test=test_list, suite=[shard_content[0]["suite"]])
         #s3.Bucket(resultsbucket_name).upload_file(f'/tmp/{project}/results/{run_id}/{job_id}.xml', f'{project}/results/{run_id}/{job_id}.xml')
         upload_folder_to_s3(resultsbucket_name, f'{project}/results/{run_id}', f'/tmp/{project}/results/{run_id}')
-
+    # Delete tmp folder
+    shutil.rmtree('/tmp', ignore_errors=True)
 
     return {
         "statusCode": 200

@@ -47,8 +47,6 @@ def lambda_handler(event, context):
     run_id = event.get('run_id', None)
    
     if project and run_id:
-        tmp_project_folder = f'/tmp/{project}'
-        shutil.rmtree(tmp_project_folder, ignore_errors=True)
         print('Downloading results folder from s3 bucket to tmp')
         print(f"project: {project} testsuite: {run_id}")
         # Download project folder from s3 bucket to tmp
@@ -65,7 +63,8 @@ def lambda_handler(event, context):
         
         #s3.Bucket(resultsbucket_name).upload_file(f'/tmp/{project}/results/{run_id}/final/output.xml', f'{project}/results/{run_id}/final/output.xml')
         upload_folder_to_s3(resultsbucket_name, f'{project}/results/{run_id}/final', f'/tmp/{project}/results/{run_id}/final')
-
+    # Delete tmp folder
+    shutil.rmtree('/tmp', ignore_errors=True)
     return {
         "statusCode": 200,
         "body": json.dumps({
