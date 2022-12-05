@@ -67,7 +67,9 @@ def lambda_handler(event, context):
             # Create list of strings in test_list with format test["suite"].test["test"]
             test_list = ["*"+test["suite"] + "." + test["test"] for test in shard_content]
             run(f'/tmp/{project}/{tests}', **options_dict, test=test_list, suite=[shard_content[0]["suite"]])
-        s3.Bucket(resultsbucket_name).upload_file(f'/tmp/{project}/results/{run_id}/{job_id}.xml', f'{project}/results/{run_id}/{job_id}.xml')
+        #s3.Bucket(resultsbucket_name).upload_file(f'/tmp/{project}/results/{run_id}/{job_id}.xml', f'{project}/results/{run_id}/{job_id}.xml')
+        upload_folder_to_s3(resultsbucket_name, f'{project}/results/{run_id}', f'/tmp/{project}/results/{run_id}')
+
 
     return {
         "statusCode": 200
@@ -91,3 +93,40 @@ def download_s3_folder(bucket_name, s3_folder, local_dir=None):
         if obj.key[-1] == '/':
             continue
         bucket.download_file(obj.key, target)
+
+def upload_folder_to_s3(bucket_name, s3_folder, local_dir):
+    """
+    Upload the contents of a folder directory
+    Args:
+        bucket_name: the name of the s3 bucket
+        s3_folder: the folder path in the s3 bucket
+        local_dir: a relative or absolute directory path in the local file system
+    """
+    client = boto3.client('s3')
+
+    # enumerate local files recursively
+    for root, dirs, files in os.walk(local_dir):
+
+        for filename in files:
+
+            # construct the full local path
+            local_path = os.path.join(root, filename)
+
+            # construct the full Dropbox path
+            relative_path = os.path.relpath(local_path, local_dir)
+            s3_path = os.path.join(s3_folder, relative_path)
+
+            # relative_path = os.path.relpath(os.path.join(root, filename))
+
+            print(f'Searching {s3_path} in {bucket_name}')
+            try:
+                client.head_object(Bucket=bucket_name, Key=s3_path)
+                print(f"Path found on S3! Skipping {s3_path}")
+
+                # try:
+                    # client.delete_object(Bucket=bucket, Key=s3_path)
+                # except:
+                    # print "Unable to delete %s..." % s3_path
+            except:
+                print("Uploading {s3_path}...")
+                client.upload_file(local_path, bucket_name, s3_path)

@@ -64,7 +64,7 @@ def lambda_handler(event, context):
         # Upload .xml file to s3 bucket
         
         #s3.Bucket(resultsbucket_name).upload_file(f'/tmp/{project}/results/{run_id}/final/output.xml', f'{project}/results/{run_id}/final/output.xml')
-        upload_folder_to_s3(f'/tmp/{project}/results/{run_id}/final', resultsbucket_name, f'{project}/results/{run_id}/final')
+        upload_folder_to_s3(resultsbucket_name, f'{project}/results/{run_id}/final', f'/tmp/{project}/results/{run_id}/final')
 
     return {
         "statusCode": 200,
