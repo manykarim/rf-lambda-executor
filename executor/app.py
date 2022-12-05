@@ -131,13 +131,13 @@ def upload_folder_to_s3(bucket_name, s3_folder, local_dir):
                 client.upload_file(local_path, bucket_name, s3_path)
 
 
-def set_test_job_status(table, run_id, job_id, status):
+def set_test_job_status(table, run_id, job_id, job_status):
     try:
         response = table.update_item(
                 Key={'run_id': run_id, 'job_id': job_id},
-                UpdateExpression="set status=:s",
+                UpdateExpression="set job_status=:s",
                 ExpressionAttributeValues={
-                    ':s': status},
+                    ':s': job_status},
                 ReturnValues="UPDATED_NEW")
     except ClientError as err:
         logger.error(

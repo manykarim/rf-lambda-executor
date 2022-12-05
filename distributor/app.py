@@ -50,7 +50,7 @@ def lambda_handler(event, context):
                     shard_data = json.load(f)
                     job_id = str(uuid.uuid4())
                     response = test_run_table.put_item(
-                                Item={'run_id': run_id, 'status': 'in progress', 'job_id': job_id, 'total': total})
+                                Item={'run_id': run_id, 'job_status': 'NOT STARTED', 'job_id': job_id, 'total': total})
                     response = test_shard_table.put_item(
                             Item={'run_id': run_id, 'shard_name': filename, 'shard_content': shard_data, 'job_id': job_id})
                     message_body = json.dumps({'project': project, 'run_id': run_id, 'shard_name': filename, 'shard_content': shard_data, 'job_id': job_id, 'tests': tests})
