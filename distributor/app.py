@@ -42,7 +42,7 @@ def lambda_handler(event, context):
         # Download project folder from s3 bucket to tmp
         download_s3_folder(testsbucket_name, project, '/tmp/' + project)
         # Create a dry run with no report, log, or output
-        dry_run = run(f'/tmp/{project}/{tests}', dryrun=True, listener=DistributorListener(shards, f'/tmp/{project}/distributor_output/'), output=None, log=None, report=None, runemptysuite=True, quiet=True, nostatusrc=True)
+        dry_run = run(f'/tmp/{project}/{tests}', dryrun=True, listener=DistributorListener(shards, f'/tmp/{project}/distributor_output/'), output=None, log=None, report=None, runemptysuite=True, quiet=True)
         for file in os.listdir(f'/tmp/{project}/distributor_output/'):
             if file.endswith(".json"):
                 # read the json file
