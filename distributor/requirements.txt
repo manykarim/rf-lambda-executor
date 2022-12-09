@@ -2,3 +2,4 @@ robotframework
 robotframework-datadriver
 robotframework-browser
 pandas
+numpy
