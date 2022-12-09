@@ -41,11 +41,11 @@ def lambda_handler(event, context):
 
     
 
-    # if run is not complete, return 202
-    if not is_run_complete(test_run_table, run_id):
+    # if run is not executed, return 202
+    if not is_run_executed(test_run_table, run_id):
         return {
             'statusCode': 202,
-            'body': json.dumps('Run is not complete')
+            'body': json.dumps('Run is not fully executed')
         }
    
     if project and run_id:
@@ -58,11 +58,11 @@ def lambda_handler(event, context):
         #rebot(f'/tmp/{project}/results/{run_id}/*.xml', outputdir=f'/tmp/{project}/results/{run_id}/final', output=f'output.xml', log=f'log.html', report=f'report.html')
         rebot_cli([f"--outputdir=/tmp/{project}/results/{run_id}/final", "--output=output.xml", "--log=log.html", "--report=report.html", "--merge", "--nostatusrc", f"/tmp/{project}/results/{run_id}/*.xml"], exit=False)
         result = ExecutionResult(f'/tmp/{project}/results/{run_id}/final/output.xml')
+        set_test_run_status(test_run_table, run_id, "MERGED")
         tests_passed = result.suite.statistics.passed
         tests_failed = result.suite.statistics.failed
         tests_total = result.suite.statistics.total
         # Upload .xml file to s3 bucket
-        
         #s3.Bucket(resultsbucket_name).upload_file(f'/tmp/{project}/results/{run_id}/final/output.xml', f'{project}/results/{run_id}/final/output.xml')
         upload_folder_to_s3(resultsbucket_name, f'{project}/results/{run_id}/final', f'/tmp/{project}/results/{run_id}/final')
     # Delete tmp folder
@@ -146,7 +146,7 @@ def upload_folder_to_s3(bucket_name, s3_folder, local_dir):
                 client.upload_file(local_path, bucket_name, s3_path)
 
 
-def is_run_complete(table, run_id):
+def is_run_executed(table, run_id):
         try:
             response = table.query(KeyConditionExpression=Key('run_id').eq(run_id))
         except ClientError as err:
@@ -157,4 +157,20 @@ def is_run_complete(table, run_id):
         else:
             # If all items in response['Items'] have item['job_status'] == COMPLETED, return True
             # Otherwise, return False
-            return all(item['job_status'] == 'COMPLETED' for item in response['Items'])
+            return all(item['job_status'] == 'EXECUTED' for item in response['Items'])
+
+def set_test_run_status(table, run_id, run_status):
+    try:
+        test_jobs = table.query(KeyConditionExpression=Key('run_id').eq(run_id))
+        for item in test_jobs['Items']:
+            response = table.update_item(
+                Key={'run_id': run_id, 'job_id': item['job_id']},
+                UpdateExpression="set job_status=:s",
+                ExpressionAttributeValues={
+                    ':s': run_status},
+                ReturnValues="UPDATED_NEW")
+    except ClientError as err:
+        logger.error(
+            "Couldn't update test_run %s, in table %s. Here's why: %s: %s",
+            run_id, table.name,
+            err.response['Error']['Code'], err.response['Error']['Message'])
