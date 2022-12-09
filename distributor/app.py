@@ -3,7 +3,8 @@ from robot import run
 import uuid
 import boto3
 import datetime
-from Listener.distributor import Distributor
+# import the DistributorListener class which is located in the Subfolder Listener/ in a file called DistributorListener.py
+from Listener.DistributorListener import DistributorListener
 import os
 import shutil
 
@@ -32,8 +33,8 @@ def lambda_handler(event, context):
     tests = data.get('tests', None)
     # Get event['run_id'], default to None
     run_id = data.get('run_id', str(uuid.uuid4()))
-    # Get event['total'], default to None
-    total = data.get('shards', None)
+    # Get event['shards'], default to None
+    shards = data.get('shards', None)
     # if project and testsuite are not None, then download project folder from s3 bucket to tmp
     if project and tests:
         print('Downloading project folder from s3 bucket to tmp')
@@ -41,7 +42,7 @@ def lambda_handler(event, context):
         # Download project folder from s3 bucket to tmp
         download_s3_folder(testsbucket_name, project, '/tmp/' + project)
         # Create a dry run with no report, log, or output
-        dry_run = run(f'/tmp/{project}/{tests}', dryrun=True, listener=Distributor(20, f'/tmp/{project}/distributor_output/'), output=None, log=None, report=None, runemptysuite=True, quiet=True)
+        dry_run = run(f'/tmp/{project}/{tests}', dryrun=True, listener=DistributorListener(shards, f'/tmp/{project}/distributor_output/'), output=None, log=None, report=None, runemptysuite=True, quiet=True, nostatusrc=True)
         for file in os.listdir(f'/tmp/{project}/distributor_output/'):
             if file.endswith(".json"):
                 # read the json file
@@ -50,7 +51,7 @@ def lambda_handler(event, context):
                     shard_data = json.load(f)
                     job_id = str(uuid.uuid4())
                     response = test_run_table.put_item(
-                                Item={'run_id': run_id, 'job_status': 'NOT STARTED', 'job_id': job_id, 'total': total})
+                                Item={'run_id': run_id, 'job_status': 'NOT STARTED', 'job_id': job_id, 'shards': shards})
                     response = test_shard_table.put_item(
                             Item={'run_id': run_id, 'shard_name': filename, 'shard_content': shard_data, 'job_id': job_id})
                     message_body = json.dumps({'project': project, 'run_id': run_id, 'shard_name': filename, 'shard_content': shard_data, 'job_id': job_id, 'tests': tests})
