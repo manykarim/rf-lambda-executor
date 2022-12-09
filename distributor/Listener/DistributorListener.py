@@ -3,8 +3,9 @@ from pandas import DataFrame as df
 import pandas as pd
 import os
 import shutil
+from robot.running import Keyword
 
-class Distributor:
+class DistributorListener:
     ROBOT_LISTENER_API_VERSION = 3
 
     def __init__(self, nodes=100, outputpath="distributor_output/"):
@@ -28,9 +29,25 @@ class Distributor:
             self.uses_datadriver = True
         else:
             self.uses_datadriver = False
+        if suite.has_setup:
+            suite.setup = Keyword('No Operation')
+        if suite.has_teardown:
+            suite.teardown = Keyword('No Operation')
+        # Remove all items from suite.resource.imports if the name of the item is not DataDriver
+        suite.resource.imports = [
+            item for item in suite.resource.imports if item.name == "DataDriver"
+        ]
+
+    def start_test(self, test, result):
+        # Replace all keywords with the keyword No Operation
+        # This is done to avoid the execution of the test
+        if test.has_setup:
+            test.setup = Keyword('No Operation')
+        if test.has_teardown:
+            test.teardown = Keyword('No Operation')
+        test.body = [Keyword('No Operation')]
 
     def end_suite(self, suite, result):
-        """Modify suite's tests to contain only every Xth."""
         # If suite contains tests, append them to the list of dictionaries with suite name and testname
         if len(suite.tests) > 0:
             for test in suite.tests:
@@ -38,7 +55,7 @@ class Distributor:
                     [
                         self.tests,
                         pd.DataFrame(
-                            [[suite.name, test.name, self.uses_datadriver]],
+                            [[suite.longname, test.name, self.uses_datadriver]],
                             columns=["suite", "test", "datadriver"],
                         ),
                     ],
