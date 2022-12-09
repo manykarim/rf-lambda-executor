@@ -8,6 +8,7 @@ import shutil
 import os
 from botocore.exceptions import ClientError
 import logging
+from allure_robotframework import allure_robotframework
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,8 @@ def lambda_handler(event, context):
         shard_content = payload.get('shard_content', None)
         download_s3_folder(testsbucket_name, project, '/tmp/' + project)
         print(str(payload))
-        options_dict = {'outputdir': f'/tmp/{project}/results/{run_id}',  'report': None, 'log': None, 'output':f'{job_id}.xml'}
+        set_test_job_status(test_run_table, run_id, job_id, "IN_PROGRESS")
+        options_dict = {'outputdir': f'/tmp/{project}/results/{run_id}',  'report': None, 'log': None, 'output':f'{job_id}.xml', 'listener':allure_robotframework(f'/tmp/{project}/results/{run_id}/allure-results')}
         if shard_content[0]["datadriver"]:
             dynamictest_list = "|".join([test["suite"] + "." + test["test"] for test in shard_content])
             dynamictest_arg = "DYNAMICTESTS:" + dynamictest_list
@@ -69,7 +71,7 @@ def lambda_handler(event, context):
         upload_folder_to_s3(resultsbucket_name, f'{project}/results/{run_id}', f'/tmp/{project}/results/{run_id}')
     # Delete tmp folder
     shutil.rmtree('/tmp', ignore_errors=True)
-    set_test_job_status(test_run_table, run_id, job_id, "COMPLETED")
+    set_test_job_status(test_run_table, run_id, job_id, "EXECUTED")
     return {
         "statusCode": 200
     }

@@ -1,3 +1,4 @@
 robotframework
 robotframework-browser
 robotframework-datadriver
+allure-robotframework
