@@ -7,6 +7,7 @@ from robot.api import ExecutionResult
 import shutil
 import os
 from botocore.exceptions import ClientError
+from boto3.dynamodb.conditions import Key
 import logging
 from allure_robotframework import allure_robotframework
 
@@ -72,6 +73,13 @@ def lambda_handler(event, context):
     # Delete tmp folder
     shutil.rmtree('/tmp', ignore_errors=True)
     set_test_job_status(test_run_table, run_id, job_id, "EXECUTED")
+
+        # if run is not executed, return 202
+    if is_run_executed(test_run_table, run_id):
+        # Execute the merger lambda function
+        lambda_client = boto3.client('lambda')
+        lambda_client.invoke(FunctionName=os.environ['MergerFunctionName'], InvocationType='Event', Payload=json.dumps({"run_id": run_id, "project": project}))
+
     return {
         "statusCode": 200
     }
@@ -146,3 +154,16 @@ def set_test_job_status(table, run_id, job_id, job_status):
             "Couldn't update test_run %s, test_job %s in table %s. Here's why: %s: %s",
             run_id, job_id, table.name,
             err.response['Error']['Code'], err.response['Error']['Message'])
+
+def is_run_executed(table, run_id):
+        try:
+            response = table.query(KeyConditionExpression=Key('run_id').eq(run_id))
+        except ClientError as err:
+            logger.error(
+                "Couldn't query for test_runs with run_id in %s. Here's why: %s: %s", run_id,
+                err.response['Error']['Code'], err.response['Error']['Message'])
+            raise
+        else:
+            # If all items in response['Items'] have item['job_status'] == COMPLETED, return True
+            # Otherwise, return False
+            return all(item['job_status'] == 'EXECUTED' for item in response['Items'])

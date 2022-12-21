@@ -88,6 +88,7 @@ Resources:
           TestsBucketName: !Ref TestsBucket
           TestRunTableName: !Ref TestRunTable
           TestShardTableName: !Ref TestShardTable
+          MergerFunctionName: !Ref MergerFunction
       Policies:
         - S3FullAccessPolicy:
             BucketName: !Ref TestsBucket
@@ -99,6 +100,8 @@ Resources:
             TableName: !Ref TestRunTable
         - DynamoDBCrudPolicy:
             TableName: !Ref TestShardTable
+        - LambdaInvokePolicy:
+            FunctionName: !Ref MergerFunction
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: ./executor
