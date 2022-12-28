@@ -18,6 +18,9 @@ Resources:
     Type: AWS::S3::Bucket
   ResultsBucket:
     Type: AWS::S3::Bucket
+##########################################################################
+#   SQS Queue                                                            #
+##########################################################################
   TestJobQueue:
     Type: AWS::SQS::Queue
     Properties:
