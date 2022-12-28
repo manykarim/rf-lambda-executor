@@ -39,6 +39,29 @@ def lambda_handler(event, context):
     # generate filename like 2020-01-01T00:00:00.000Z.txt with current timestamp
     current_timestamp = datetime.datetime.utcnow().isoformat()
 
+    if is_run_merged(test_run_table, run_id):
+        print('Downloading results folder from s3 bucket to tmp')
+        print(f"project: {project} testsuite: {run_id}")
+        # Download project folder from s3 bucket to tmp
+        download_s3_folder(resultsbucket_name, f'{project}/results/{run_id}/final', f'/tmp/{project}/results/{run_id}/final')
+        result = ExecutionResult(f'/tmp/{project}/results/{run_id}/final/output.xml')
+        set_test_run_status(test_run_table, run_id, "MERGED")
+        tests_passed = result.suite.statistics.passed
+        tests_failed = result.suite.statistics.failed
+        tests_total = result.suite.statistics.total
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "run_id": run_id,
+                "tests_passed": tests_passed,
+                "tests_failed": tests_failed,
+                "tests_total": tests_total,
+                "download_xml": f"s3://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/final/output.xml",
+                "download_log": f"s3://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/final/log.html",
+                "download_report": f"s3://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/final/report.html",
+                "allure_results": f"s3://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/allure-results"
+            })
+        }
     
 
     # if run is not executed, return 202
@@ -53,9 +76,6 @@ def lambda_handler(event, context):
         print(f"project: {project} testsuite: {run_id}")
         # Download project folder from s3 bucket to tmp
         download_s3_folder(resultsbucket_name, f'{project}/results/{run_id}', f'/tmp/{project}/results/{run_id}')
-        # Print all files and folders recursively
-        print_all_files_and_folders_recursively(f'/tmp/{project}/results/')
-        #rebot(f'/tmp/{project}/results/{run_id}/*.xml', outputdir=f'/tmp/{project}/results/{run_id}/final', output=f'output.xml', log=f'log.html', report=f'report.html')
         rebot_cli([f"--outputdir=/tmp/{project}/results/{run_id}/final", "--output=output.xml", "--log=log.html", "--report=report.html", "--merge", "--nostatusrc", f"/tmp/{project}/results/{run_id}/*.xml"], exit=False)
         result = ExecutionResult(f'/tmp/{project}/results/{run_id}/final/output.xml')
         set_test_run_status(test_run_table, run_id, "MERGED")
@@ -74,9 +94,11 @@ def lambda_handler(event, context):
             "tests_passed": tests_passed,
             "tests_failed": tests_failed,
             "tests_total": tests_total,
-            "download_xml": f"https://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/final/output.xml",
-            "download_log": f"https://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/final/log.html",
-            "download_report": f"https://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/final/report.html"
+            "download_xml": f"s3://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/final/output.xml",
+            "download_log": f"s3://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/final/log.html",
+            "download_report": f"s3://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/final/report.html",
+            "allure_results": f"s3://{resultsbucket_name}.s3.amazonaws.com/{project}/results/{run_id}/allure-results"
+
         }),
     }
 
@@ -93,11 +115,12 @@ def download_s3_folder(bucket_name, s3_folder, local_dir=None):
     for obj in bucket.objects.filter(Prefix=s3_folder):
         target = obj.key if local_dir is None \
             else os.path.join(local_dir, os.path.relpath(obj.key, s3_folder))
-        if not os.path.exists(os.path.dirname(target)):
-            os.makedirs(os.path.dirname(target))
-        if obj.key[-1] == '/':
-            continue
-        bucket.download_file(obj.key, target)
+        if not target.startswith(f"{s3_folder}/allure-results/"):
+            if not os.path.exists(os.path.dirname(target)):
+                os.makedirs(os.path.dirname(target))
+            if obj.key[-1] == '/':
+                continue
+            bucket.download_file(obj.key, target)
 
 def print_all_files_and_folders_recursively(path):
     for root, dirs, files in os.walk(path):
@@ -147,17 +170,31 @@ def upload_folder_to_s3(bucket_name, s3_folder, local_dir):
 
 
 def is_run_executed(table, run_id):
-        try:
-            response = table.query(KeyConditionExpression=Key('run_id').eq(run_id))
-        except ClientError as err:
-            logger.error(
-                "Couldn't query for test_runs with run_id in %s. Here's why: %s: %s", run_id,
-                err.response['Error']['Code'], err.response['Error']['Message'])
-            raise
-        else:
-            # If all items in response['Items'] have item['job_status'] == COMPLETED, return True
-            # Otherwise, return False
-            return all(item['job_status'] == 'EXECUTED' for item in response['Items'])
+    try:
+        response = table.query(KeyConditionExpression=Key('run_id').eq(run_id))
+    except ClientError as err:
+        logger.error(
+            "Couldn't query for test_runs with run_id in %s. Here's why: %s: %s", run_id,
+            err.response['Error']['Code'], err.response['Error']['Message'])
+        raise
+    else:
+        # If all items in response['Items'] have item['job_status'] == COMPLETED, return True
+        # Otherwise, return False
+        return all(item['job_status'] == 'EXECUTED' for item in response['Items'])
+
+def is_run_merged(table, run_id):
+    try:
+        response = table.query(KeyConditionExpression=Key('run_id').eq(run_id))
+    except ClientError as err:
+        logger.error(
+            "Couldn't query for test_runs with run_id in %s. Here's why: %s: %s", run_id,
+            err.response['Error']['Code'], err.response['Error']['Message'])
+        raise
+    else:
+        # If all items in response['Items'] have item['job_status'] == MERGED, return True
+        # Otherwise, return False
+        return all(item['job_status'] == 'MERGED' for item in response['Items'])
+
 
 def set_test_run_status(table, run_id, run_status):
     try:
