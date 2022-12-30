@@ -29,12 +29,12 @@ def lambda_handler(event, context):
         data=event
     # Get event['project'], default to None
     project = data.get('project', None)
-    # Get event['tests'], default to None
-    tests = data.get('tests', None)
+    # Get event['tests'], default to tests/
+    tests = data.get('tests', 'tests/')
     # Get event['run_id'], default to None
     run_id = data.get('run_id', str(uuid.uuid4()))
     # Get event['shards'], default to None
-    shards = data.get('shards', None)
+    shards = int(data.get('shards', 1))
     # if project and testsuite are not None, then download project folder from s3 bucket to tmp
     if project and tests:
         print('Downloading project folder from s3 bucket to tmp')
@@ -74,15 +74,17 @@ def lambda_handler(event, context):
                             }
                         }
                     )
-    # Delete tmp folder
-    shutil.rmtree('/tmp', ignore_errors=True)
-    return {
-        'statusCode': 200,
-        'body': json.dumps(f'Test run {run_id} created')
-    }
-                        
-
-
+        # Delete tmp folder
+        shutil.rmtree('/tmp', ignore_errors=True)
+        return {
+            'statusCode': 200,
+            'body': json.dumps(f'Test run {run_id} created')
+        }
+    else:
+        return {
+            'statusCode': 400,
+            'body': json.dumps('project and testsuite are required')
+        }
 
 def download_s3_folder(bucket_name, s3_folder, local_dir=None):
     """
